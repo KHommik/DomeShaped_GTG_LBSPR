@@ -80,3 +80,8 @@ for (i in seq_along(Linfseq)){
     output_pred <- list.append(output_pred, runopt$PredLen) #saves predicted lengths for each run
   }
 }
+
+results_glen <- adply(GTGOut,c(1,3))
+input_glen <- adply(GTGIn,c(1,3))
+
+final_glen <- cbind(results_glen, input_glen)
