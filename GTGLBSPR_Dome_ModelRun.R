@@ -7,6 +7,9 @@ library(dplyr)
 library(ggplot2)
 library(rlist)
 
+# load GTG LB-SPR routines
+source("GTGLBSPR_Dome.R")
+
 # read in the input data
 setwd("H:/RESEARCH/SSHEPHARD/IFI_Analysis/LBSPR_Trout/Kristiina/GTG_LBSPR")
 trout <- read.csv(file="Trout_Selection.csv", header=TRUE)
