@@ -34,6 +34,13 @@ StockPars$Wbeta <- 3.1115
 StockPars$Steepness <- 0.8 
 StockPars$Mpow <- 0
 
+FleetPars <- NULL
+FleetPars$SL50 <- 10.43     # k_mode from SELECT (log-normal)
+FleetPars$SL95 <- 0.27      # standard deviation at log scale from SELECT
+FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
+FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
+#FleetPars$MLLKnife <- 23
+
 SizeBins <- NULL
 SizeBins$Linc <- 1
 SizeBins$ToSize <- 40.7 * 1.1 # This is StockPars$Linf * 1.1
