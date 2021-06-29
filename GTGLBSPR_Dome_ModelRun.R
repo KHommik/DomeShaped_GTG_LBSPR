@@ -11,13 +11,13 @@ library(rlist)
 source("GTGLBSPR_Dome.R")
 
 # read in the input data
-setwd("H:/RESEARCH/SSHEPHARD/IFI_Analysis/LBSPR_Trout/Kristiina/GTG_LBSPR")
+#setwd("")
 trout <- read.csv(file="Trout_Selection.csv", header=TRUE)
 glen <- trout %>% filter(lake=="Glen")  
-EmpData <- glen$TLcm  # length data of brown trout in Glen Lough
+empLengthData <- glen$TLcm  # empirical length data of brown trout in Glen Lough
 
 # plotting the length distribution
-hist(unlist(EmpData), breaks = 15, col="grey", main="Glen", xlab = "Length (cm)", xlim=c(5, 30)) 
+hist(unlist(empLengthData), breaks = 15, col="grey", main="Glen", xlab = "Length (cm)", xlim=c(5, 30)) 
 # samples_glen <- readRDS("samples_glen.rds") # reading in the Linf posterior distribution
 
 
@@ -38,54 +38,61 @@ StockPars$Steepness <- 0.8
 StockPars$Mpow <- 0
 
 FleetPars <- NULL
+# see Table 4 
+# "Dome-shaped selectivity in LB-SPR: Length-Based assessment of data-limited inland fish stocks sampled with gillnets"
+# https://www.sciencedirect.com/science/article/pii/S0165783620300916
 FleetPars$SL50 <- 10.43     # k_mode from SELECT (log-normal)
 FleetPars$SL95 <- 0.27      # standard deviation at log scale from SELECT
 FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
 FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
 #FleetPars$MLLKnife <- 23
 
+fixedFleetPars <- FleetPars
+
 SizeBins <- NULL
 SizeBins$Linc <- 1
 SizeBins$ToSize <- 40.7 * 1.1 # This is StockPars$Linf * 1.1
 
-File <- EmpData
+File <- empLengthData
 
 LenBins <- seq(from=0, to=SizeBins$ToSize, by=SizeBins$Linc)
 LenMids <- seq(from=0.05*SizeBins$Linc, by=SizeBins$Linc,length.out=(length(LenBins)-1))
-LenDat <- as.vector(table(cut(unlist(EmpData), LenBins))) 
+LenDat <- as.vector(table(cut(unlist(empLengthData), LenBins))) 
 
-nsims <- 1 #how many runs
+#nsims <- 1 #how many runs
 MKseq <- c(1.5, 1.8, 2.0)
 Linfseq  <- c(40.7, 42) # Just using a single estimate of Linf
 # Linf <- samples_glen$Linf # posterior distribution of Linf
 
 # table to save output of the model
-GTGOut <- array(NA, dim=c(nsims,5,3,2), 
-                dimnames = list(d1 = c(1:nsims),d2 = c("NLL","FM","SL50", "sigma","SPR"),
-                                d3 = c("MK1.5","MK1.8", "MK2.0"),
-                                d4 = c("Linf40.7", "Linf42"))) 
+GTGOut <- array(NA, dim=c(length(Linfseq), 5, length(MKseq)), #dim=c(nsims,5,3,2), 
+                dimnames = list(d1 = c("Linf40.7", "Linf42"),
+                                d2 = c("NLL","FM","SL50", "SL95","SPR"),
+                                d3 = c("MK1.5", "MK1.8", "MK2.0")
+                                )
+                ) 
 # table to save the model input values
-GTGIn <- array(NA, dim=c(nsims,2,6))  
+GTGIn <- array(NA, dim = c(length(Linfseq), 2, length(MKseq))) #c(nsims, length(Linfseq), 2, length(MKseq))
 
 
 output_pred <- list()
 # for (i in 1:nsims){
 #   StockPars$Linf <- Linf[i]
-for (i in seq_along(Linfseq)){
-  StockPars$Linf <- Linfseq[i]
-  for (sp in seq_along(MKseq)){
-    StockPars$MK <- MKseq[sp]
+for (iLinf in seq_along(Linfseq)){
+  StockPars$Linf <- Linfseq[iLinf]
+  for (iMK in seq_along(MKseq)){
+    StockPars$MK <- MKseq[iMK]
     
-    GTGIn[i,1,sp] <- StockPars$MK
-    GTGIn[i,2,sp] <- StockPars$Linf
+    GTGIn[iLinf,1,iMK] <- StockPars$MK
+    GTGIn[iLinf,2,iMK] <- StockPars$Linf
     
-    runopt <- DoOpt(StockPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG", sel = "Normal") # this is the model; specify the selectivity ("Normal"/"logNorm") 
+    runopt <- DoOptDome(StockPars, fixedFleetPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG", sel = "logNorm") # this is the model; specify the selectivity ("Normal.sca"/"Normal.loc"/logNorm") 
     
-    GTGOut[i,1,sp] <- runopt$NLL[1]
-    GTGOut[i,2,sp] <- runopt$Ests[1]  #FM
-    GTGOut[i,3,sp] <- runopt$Ests[2]  #SL50
-    GTGOut[i,4,sp] <- runopt$Ests[3]  #sigma
-    GTGOut[i,5,sp] <- runopt$Ests[4]  #SPR
+    GTGOut[iLinf,1,iMK] <- runopt$NLL[1]
+    GTGOut[iLinf,2,iMK] <- runopt$Ests[1]  #FM
+    GTGOut[iLinf,3,iMK] <- runopt$Ests[2]  #SL50
+    GTGOut[iLinf,4,iMK] <- runopt$Ests[3]  #SL95
+    GTGOut[iLinf,5,iMK] <- runopt$Ests["SPR"]  #SPR
     
     output_pred <- list.append(output_pred, runopt$PredLen) #saves predicted lengths for each run
   }
