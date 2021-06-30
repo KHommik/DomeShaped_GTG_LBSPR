@@ -22,10 +22,11 @@ lengthBinWidth <- 1
 
 # visualise length distribution ====
 # geom_histogram
-ggplot(data = catchAtLength) + 
+pgLHist <- ggplot(data = catchAtLength) + 
   geom_histogram(aes(x = TL), binwidth = lengthBinWidth, boundary = 0, closed = "left", 
                  fill = "grey75", colour = "black") + 
   theme_bw()
+pgLHist
 
 # hist
 lHist <- hist(empLengthData, breaks = seq(0, ceiling(max(empLengthData)), lengthBinWidth), col="grey",  
@@ -41,7 +42,7 @@ lHist <- hist(empLengthData, breaks = seq(0, ceiling(max(empLengthData)), length
 StockPars <- NULL 
 # StockPars$MK <- 1.8
 StockPars$NGTG <- 17
- StockPars$Linf <- 40.7
+StockPars$Linf <- 40.7
 #StockPars$Linf <- 120.
 StockPars$CVLinf <- 0.1
 StockPars$MaxSD <- 2
@@ -82,6 +83,56 @@ FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
 # FleetPars$SL1 <- 75.0
 # FleetPars$SL2 <- 90.0
 
+
+# preliminary visualisation of selectivity ####
+
+# calculate selectivity
+lengthFish <- seq(0, StockPars$Linf*(1 + StockPars$CVLinf*StockPars$MaxSD), length.out = 101)
+if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
+
+if(gearSelectivity == "Logistic"){
+  SL50 <- FleetPars$SL1; SL95 <- FleetPars$SL2
+  gearSelLen <- 1.0/(1+exp(-log(19)*(lengthFish-SL50)/((SL95)-(SL50)))) # Selectivity-at-Length
+}else if(gearSelectivity=="Normal.sca"){
+  SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+  gearSelLen <- 0
+  for (j in seq_along(SLmesh)){
+    gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk1)*meshSize[j]))/((SLk2)^0.5*meshSize[j]))^2)
+  }
+  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+  gearSelLen <- gearSelLen/max(gearSelLen)
+  
+}else if(gearSelectivity=="Normal.loc"){ 
+  SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+  gearSelLen <- 0
+  for (j in seq_along(meshSize)){
+    gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk)*meshSize[j]))/((SLsigma)))^2)
+  }
+  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+  gearSelLen <- gearSelLen/max(gearSelLen)
+  
+}else if(gearSelectivity=="logNorm"){ 
+  SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+  gearSelLen <- 0
+  for (j in seq_along(meshSize)){
+    gearSelLen <- gearSelLen + exp(-0.5*((log(lengthFish)-log((SLk)*meshSize[j]))/(SLsigma))^2)
+  }
+  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+  gearSelLen <- gearSelLen/max(gearSelLen)
+  
+}else if(gearSelectivity=="Knife"){    # knife-edge selectivity
+  MLLKnife <- FleetPars$MLLKnife
+  gearSelLen <- 0
+  gearSelLen[lengthFish < MLLKnife] <- 0
+  gearSelLen[lengthFish > MLLKnife] <- 1
+}
+
+# add selectivity line to histogram
+lines(lengthFish, max(lHist$counts)*gearSelLen, lty =2, col = "black", lwd = 1.5)
+pgLHist <- pgLHist + geom_line(data = data.frame(length = lengthFish, selectivity = max(lHist$counts)*gearSelLen),
+                               aes(x = length, y = selectivity), colour = "black", linetype = 2, size = 1.25)
+pgLHist
+
 # gear/fleet parameters  are considered "fixed" - not optmised when fitting to data
 fixedFleetPars <- FleetPars
 
@@ -91,7 +142,8 @@ fixedFleetPars <- FleetPars
 # length data - discretisation ####
 SizeBins <- NULL
 SizeBins$Linc <- lengthBinWidth
-SizeBins$ToSize <- StockPars$Linf * 1.1 # This is StockPars$Linf * 1.1
+SDLinf <- StockPars$CVLinf * StockPars$Linf
+SizeBins$ToSize <- StockPars$Linf + SDLinf*StockPars$MaxSD # maximum length of length bins based on GTG pars
 
 LenBins <- seq(from=0, to=SizeBins$ToSize, by=SizeBins$Linc)
 LenMids <- seq(from=0.5*SizeBins$Linc, by=SizeBins$Linc,length.out=(length(LenBins)-1))
