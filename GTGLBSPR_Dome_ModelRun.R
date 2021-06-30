@@ -73,65 +73,72 @@ gearSelectivity <- "logNorm"
 #FleetPars$SL2 <- 7.06
 #gearSelectivity <- "Normal.loc"
 
+# dome-shaped mesh specifications
 FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
 FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
+
+# knife-edge
 #FleetPars$MLLKnife <- 23
 
 # logistic
-# FleetPars <- NULL
-# gearSelectivity <- "Logistic"
+#FleetPars <- NULL
+#gearSelectivity <- "Logistic"
 # FleetPars$SL1 <- 75.0
 # FleetPars$SL2 <- 90.0
 
 
 # preliminary visualisation of selectivity ####
 
-# calculate selectivity
-lengthFish <- seq(0, StockPars$Linf*(1 + StockPars$CVLinf*StockPars$MaxSD), length.out = 101)
-if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
-
-if(gearSelectivity == "Logistic"){
-  SL50 <- FleetPars$SL1; SL95 <- FleetPars$SL2
-  gearSelLen <- 1.0/(1+exp(-log(19)*(lengthFish-SL50)/((SL95)-(SL50)))) # Selectivity-at-Length
-}else if(gearSelectivity=="Normal.sca"){
-  SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
-  gearSelLen <- 0
-  for (j in seq_along(SLmesh)){
-    gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk1)*meshSize[j]))/((SLk2)^0.5*meshSize[j]))^2)
-  }
-  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
-  gearSelLen <- gearSelLen/max(gearSelLen)
+# calculate selectivity at length *IF* appropriate parameters are specified
+if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnife))){
   
-}else if(gearSelectivity=="Normal.loc"){ 
-  SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
-  gearSelLen <- 0
-  for (j in seq_along(meshSize)){
-    gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk)*meshSize[j]))/((SLsigma)))^2)
-  }
-  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
-  gearSelLen <- gearSelLen/max(gearSelLen)
+  lengthFish <- seq(0, StockPars$Linf*(1 + StockPars$CVLinf*StockPars$MaxSD), length.out = 101)
+  if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
   
-}else if(gearSelectivity=="logNorm"){ 
-  SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
-  gearSelLen <- 0
-  for (j in seq_along(meshSize)){
-    gearSelLen <- gearSelLen + exp(-0.5*((log(lengthFish)-log((SLk)*meshSize[j]))/(SLsigma))^2)
+  if(gearSelectivity == "Logistic"){
+    SL50 <- FleetPars$SL1; SL95 <- FleetPars$SL2
+    gearSelLen <- 1.0/(1+exp(-log(19)*(lengthFish-SL50)/((SL95)-(SL50)))) # Selectivity-at-Length
+  }else if(gearSelectivity=="Normal.sca"){
+    SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    gearSelLen <- 0
+    for (j in seq_along(SLmesh)){
+      gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk1)*meshSize[j]))/((SLk2)^0.5*meshSize[j]))^2)
+    }
+    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    gearSelLen <- gearSelLen/max(gearSelLen)
+    
+  }else if(gearSelectivity=="Normal.loc"){ 
+    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    gearSelLen <- 0
+    for (j in seq_along(meshSize)){
+      gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk)*meshSize[j]))/((SLsigma)))^2)
+    }
+    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    gearSelLen <- gearSelLen/max(gearSelLen)
+    
+  }else if(gearSelectivity=="logNorm"){ 
+    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    gearSelLen <- 0
+    for (j in seq_along(meshSize)){
+      gearSelLen <- gearSelLen + exp(-0.5*((log(lengthFish)-log((SLk)*meshSize[j]))/(SLsigma))^2)
+    }
+    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    gearSelLen <- gearSelLen/max(gearSelLen)
+    
+  }else if(gearSelectivity=="Knife"){    # knife-edge selectivity
+    MLLKnife <- FleetPars$MLLKnife
+    gearSelLen <- 0
+    gearSelLen[lengthFish < MLLKnife] <- 0
+    gearSelLen[lengthFish > MLLKnife] <- 1
   }
-  if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
-  gearSelLen <- gearSelLen/max(gearSelLen)
   
-}else if(gearSelectivity=="Knife"){    # knife-edge selectivity
-  MLLKnife <- FleetPars$MLLKnife
-  gearSelLen <- 0
-  gearSelLen[lengthFish < MLLKnife] <- 0
-  gearSelLen[lengthFish > MLLKnife] <- 1
+  # add selectivity line to histogram
+  lines(lengthFish, max(lHist$counts)*gearSelLen, lty =2, col = "black", lwd = 1.5)
+  pgLHist <- pgLHist + geom_line(data = data.frame(length = lengthFish, selectivity = max(lHist$counts)*gearSelLen),
+                                 aes(x = length, y = selectivity), colour = "black", linetype = 2, size = 1.25)
+  pgLHist
 }
 
-# add selectivity line to histogram
-lines(lengthFish, max(lHist$counts)*gearSelLen, lty =2, col = "black", lwd = 1.5)
-pgLHist <- pgLHist + geom_line(data = data.frame(length = lengthFish, selectivity = max(lHist$counts)*gearSelLen),
-                               aes(x = length, y = selectivity), colour = "black", linetype = 2, size = 1.25)
-pgLHist
 
 # gear/fleet parameters  are considered "fixed" - not optmised when fitting to data
 fixedFleetPars <- FleetPars
