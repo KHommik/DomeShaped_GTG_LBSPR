@@ -15,15 +15,16 @@ source("GTGLBSPR_Dome.R")
 # brown trout length data, Glen Lough ====
 #setwd("")
 trout <- read.csv(file="Trout_Selection.csv", header=TRUE)
-catchAtLength <- trout %>% filter(lake=="Glen")  
-empLengthData <- catchAtLength$TLcm  # empirical length data of brown trout in Glen Lough
+catchAtLength <- trout %>% filter(lake=="Glen") %>%
+  mutate(length_cm = TL)
+empLengthData <- catchAtLength$length_cm  # empirical length data of brown trout in Glen Lough
 lengthBinWidth <- 1
 
 
 # visualise length distribution ====
 # geom_histogram
 pgLHist <- ggplot(data = catchAtLength) + 
-  geom_histogram(aes(x = TL), binwidth = lengthBinWidth, boundary = 0, closed = "left", 
+  geom_histogram(aes(x = length_cm), binwidth = lengthBinWidth, boundary = 0, closed = "left", 
                  fill = "grey75", colour = "black") + 
   theme_bw()
 pgLHist
@@ -63,20 +64,22 @@ FleetPars <- NULL
 # "Dome-shaped selectivity in LB-SPR: Length-Based assessment of data-limited inland fish stocks sampled with gillnets"
 # https://www.sciencedirect.com/science/article/pii/S0165783620300916
 
+# dome-shaped selectivity shapes
 # lognorm
+gearSelectivity <- "logNorm"
 FleetPars$SL1 <- 10.43     # k_mode from SELECT (log-normal)
 FleetPars$SL2 <- 0.27      # standard deviation at log scale from SELECT
-gearSelectivity <- "logNorm"
 
 # norm.loc
+#gearSelectivity <- "Normal.loc"
 #FleetPars$SL1 <- 9.52
 #FleetPars$SL2 <- 7.06
-#gearSelectivity <- "Normal.loc"
 
 # dome-shaped mesh specifications
 FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
 FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
 
+# other selectivity shapes
 # knife-edge
 #FleetPars$MLLKnife <- 23
 
@@ -133,10 +136,10 @@ if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnif
   }
   
   # add selectivity line to histogram
-  lines(lengthFish, max(lHist$counts)*gearSelLen, lty =2, col = "black", lwd = 1.5)
   pgLHist <- pgLHist + geom_line(data = data.frame(length = lengthFish, selectivity = max(lHist$counts)*gearSelLen),
                                  aes(x = length, y = selectivity), colour = "black", linetype = 2, size = 1.25)
   pgLHist
+  lines(lengthFish, max(lHist$counts)*gearSelLen, lty =2, col = "black", lwd = 1.5)
 }
 
 
