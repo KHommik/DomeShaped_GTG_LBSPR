@@ -22,8 +22,8 @@
 
 #runmod<-GTGLBSPRSim(StockPars, Fleet, SizeBins, sel)
 
-GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL,sel)  { 
-  #=c("Logistic","Normal","Knife")						  
+GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL)  {
+
   sink(stdout(), type="message")  
   # Assign Variables 
   NGTG <- StockPars$NGTG 
@@ -44,30 +44,31 @@ GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL,sel)  {
   R0 <- StockPars$R0 
   
   MLLKnife <- FleetPars$MLLKnife
+  selectivityCurve <- FleetPars$selectivityCurve
   
   # extract selectivity-at-length parameters
-  if(sel == "Logistic"){
+  if(selectivityCurve == "Logistic"){
     SL50 <- FleetPars$SL1
     SL95 <- FleetPars$SL2
-  } else if(sel == "Normal.loc"){             # normal selectivity with fixed spread
+  } else if(selectivityCurve == "Normal.loc"){             # normal selectivity with fixed spread
     SLk <- FleetPars$SL1
     SLsigma <- FleetPars$SL2
     SLmesh <- FleetPars$SLmesh                # mesh sizes
-    MLLNormal <- FleetPars$MLLNormal          # minimum landing limit, if necessary
-    if (is.null(MLLNormal)) MLLNormal <- NA
-  } else if(sel == "Normal.sca"){             # normal selectivity with proportional spread
+    SLMin <- FleetPars$SLMin          # minimum landing limit, if necessary
+    if (is.null(SLMin)) SLMin <- NA
+  } else if(selectivityCurve == "Normal.sca"){             # normal selectivity with proportional spread
     SLk1 <- FleetPars$SL1
     SLk2 <- FleetPars$SL2
     SLmesh <- FleetPars$SLmesh 
-    MLLNormal <- FleetPars$MLLNormal
-    if (is.null(MLLNormal)) MLLNormal <- NA 
-  } else if(sel == "logNorm"){                # lognormal selectivity
+    SLMin <- FleetPars$SLMin
+    if (is.null(SLMin)) SLMin <- NA
+  } else if(selectivityCurve == "logNorm"){                # lognormal selectivity
     SLk <- FleetPars$SL1
     SLsigma <- FleetPars$SL2
     SLmesh <- FleetPars$SLmesh 
-    MLLNormal <- FleetPars$MLLNormal
-    if (is.null(MLLNormal)) MLLNormal <- NA  
-  } else if(sel=="Knife"){                    # Knife-edge selectivity
+    SLMin <- FleetPars$SLMin
+    if (is.null(SLMin)) SLMin <- NA
+  } else if(selectivityCurve=="Knife"){                    # Knife-edge selectivity
     MLLKnife <- FleetPars$MLLKnife
   }  
   FM <- FleetPars$FM 
@@ -125,34 +126,34 @@ GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL,sel)  {
     1.0/(1+exp(-log(19)*(LenMids-L50GTG[X])/DeltaGTG[X])))
   FecLenGTG <- MatLenGTG * LenMids^FecB # Fecundity across GTGs 
   
-  if(sel=="Logistic"){
+  if(selectivityCurve=="Logistic"){
     VulLen <- 1.0/(1+exp(-log(19)*((LenBins+0.5*Linc)-SL50)/((SL95)-(SL50)))) # Selectivity-at-Length
     
-  }else if(sel=="Normal.sca"){ 
+  }else if(selectivityCurve=="Normal.sca"){
     VulLen <- 0
     for (j in seq_along(SLmesh)){
       VulLen <- VulLen + exp(-0.5*(((LenBins+0.5*Linc)-((SLk1)*SLmesh[j]))/((SLk2)^0.5*SLmesh[j]))^2)
     }
-    if(!is.na(MLLNormal)) VulLen[LenBins < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen[LenBins < SLMin] <- 0
     VulLen <- VulLen/max(VulLen)
     
-  }else if(sel=="Normal.loc"){ 
+  }else if(selectivityCurve=="Normal.loc"){
     VulLen <- 0
     for (j in seq_along(SLmesh)){
       VulLen <- VulLen + exp(-0.5*(((LenBins+0.5*Linc)-((SLk)*SLmesh[j]))/((SLsigma)))^2)
     }
-    if(!is.na(MLLNormal)) VulLen[LenBins < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen[LenBins < SLMin] <- 0
     VulLen <- VulLen/max(VulLen)
     
-  }else if(sel=="logNorm"){ 
+  }else if(selectivityCurve=="logNorm"){
     VulLen <- 0
     for (j in seq_along(SLmesh)){
       VulLen <- VulLen + exp(-0.5*((log(LenBins+0.5*Linc)-log((SLk)*SLmesh[j]))/(SLsigma))^2)
     }
-    if(!is.na(MLLNormal)) VulLen[LenBins < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen[LenBins < SLMin] <- 0
     VulLen <- VulLen/max(VulLen)
     
-  }else if(sel=="Knife"){    # knife-edge selectivity
+  }else if(selectivityCurve=="Knife"){    # knife-edge selectivity
     VulLen <- 0
     VulLen[(LenBins+0.5*Linc) < MLLKnife] <- 0
     VulLen[(LenBins+0.5*Linc) > MLLKnife] <- 1
@@ -202,34 +203,34 @@ GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL,sel)  {
     FecGTGUnfished[L, ] <- NatLUnFishedPop[L, ] * FecLenGTG[L, ]
   }
   
-  if(sel=="Logistic"){
+  if(selectivityCurve=="Logistic"){
     VulLen2 <- 1.0/(1+exp(-log(19)*(LenMids-(SL50))/((SL95)-(SL50))))# Selectivity-at-Length
     
-  }else if(sel=="Normal.sca"){   # normal selectivity with proportional spread   
+  }else if(selectivityCurve=="Normal.sca"){   # normal selectivity with proportional spread
     VulLen2 <- 0
     for (j in seq_along(SLmesh)){
       VulLen2 <- VulLen2 + exp(-0.5*((LenMids-((SLk1)*SLmesh[j]))/((SLk2)^0.5*SLmesh[j]))^2)
     }
-    if(!is.na(MLLNormal)) VulLen2[LenMids < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen2[LenMids < SLMin] <- 0
     VulLen2 <- VulLen2/max(VulLen2)
     
-  }else if(sel=="Normal.loc"){   # normal selectivity with fixed spread
+  }else if(selectivityCurve=="Normal.loc"){   # normal selectivity with fixed spread
     VulLen2 <- 0
     for (j in seq_along(SLmesh)){
       VulLen2 <- VulLen2 + exp(-0.5*((LenMids-((SLk)*SLmesh[j]))/(SLsigma))^2)
     }
-    if(!is.na(MLLNormal)) VulLen2[LenMids < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen2[LenMids < SLMin] <- 0
     VulLen2 <- VulLen2/max(VulLen2)
     
-  }else if(sel=="logNorm"){   # lognormal selectivity
+  }else if(selectivityCurve=="logNorm"){   # lognormal selectivity
     VulLen2 <- 0
     for (j in seq_along(SLmesh)){
       VulLen2 <- VulLen2 + exp(-0.5*((log(LenMids)-log((SLk)*SLmesh[j]))/(SLsigma))^2)
     }
-    if(!is.na(MLLNormal)) VulLen2[LenMids < MLLNormal] <- 0 
+    if(!is.na(SLMin)) VulLen2[LenMids < SLMin] <- 0
     VulLen2 <- VulLen2/max(VulLen2)
     
-  }else if(sel=="Knife"){   # knife-edge selectivity
+  }else if(selectivityCurve=="Knife"){   # knife-edge selectivity
     VulLen2 <- 0
     VulLen2[LenMids < MLLKnife] <- 0
     VulLen2[LenMids > MLLKnife] <- 1
@@ -333,32 +334,33 @@ GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL,sel)  {
 #OptFun calls the length dist simulation and SPR calculations for given M/K, Linf and sigma^2 or CV Linf and trial selectivity parameters plus F/M
 #the negative log likelihood (multinomial likelihood) of the observed length distn given life-history and selectivity parameters is returned
 
-OptFunDome <- function(tryFleetPars, fixedFleetPars = NULL, LenDat, StockPars, SizeBins=NULL, 
-                     mod=c("GTG", "LBSPR"),sel=c("Logistic","Normal.sca","Knife", "logNorm", "Normal.loc")) {
+OptFunDome <- function(tryFleetPars, fixedFleetPars, LenDat, StockPars, SizeBins=NULL, 
+                     mod=c("GTG", "LBSPR")) {
   
   Fleet <- NULL
-  if(sel=="Logistic"){
-    if(length(tryFleetPars) == 3 & is.null(fixedFleetPars)){
+  Fleet$selectivityCurve <- fixedFleetPars$selectivityCurve
+  if(Fleet$selectivityCurve=="Logistic"){
+    if(length(tryFleetPars) == 3 & length(fixedFleetPars) == 1 & names(fixedFleetPars) == "selectivityCurve"){
       Fleet$SL1 <- exp(tryFleetPars[2]) * StockPars$Linf
       Fleet$SL2 <- Fleet$SL1  + (exp(tryFleetPars[3]) * StockPars$Linf)
     } else {
       Fleet$SL1 <- fixedFleetPars$SL1
       Fleet$SL2 <- fixedFleetPars$SL2
     }
-  }else if(sel=="Knife"){
+  }else if(Fleet$selectivityCurve=="Knife"){
     Fleet$MLLKnife <- fixedFleetPars$MLLKnife
-  }else if(sel %in% c("Normal.sca", "Normal.loc", "logNorm")){
+  }else if(Fleet$selectivityCurve %in% c("Normal.sca", "Normal.loc", "logNorm")){
     Fleet$SL1 <- fixedFleetPars$SL1 
     Fleet$SL2 <- fixedFleetPars$SL2
     Fleet$SLmesh <- fixedFleetPars$SLmesh
-    if(!is.null(fixedFleetPars$MLLNormal)) Fleet$MLLNormal <- fixedFleetPars$MLLNormal
+    if(!is.null(fixedFleetPars$SLMin)) Fleet$SLMin <- fixedFleetPars$SLMin
   }
   
   
   Fleet$FM <- exp(tryFleetPars[1]) # changed to 1 from 3, as other parameters are fixed
 
-  if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, Fleet, SizeBins, sel)
-  if (mod == "LBSPR") runMod <- DomeLBSPRSim(StockPars, Fleet, SizeBins, sel)
+  if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, Fleet, SizeBins)
+  if (mod == "LBSPR") runMod <- DomeLBSPRSim(StockPars, Fleet, SizeBins)
   
   LenDat <- LenDat + 1E-15 # add tiny constant for zero catches
   LenProb <- LenDat/sum(LenDat)
@@ -381,9 +383,9 @@ OptFunDome <- function(tryFleetPars, fixedFleetPars = NULL, LenDat, StockPars, S
   return(NLL)
 }
 
-DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("GTG", "LBSPR"),
-                    sel=c("Logistic","Normal.sca","Knife", "logNorm", "Normal.loc")) {
+DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("GTG", "LBSPR")) {
   
+
   SDLinf <- StockPars$CVLinf * StockPars$Linf
   if (is.null(SizeBins)) {
     SizeBins$Linc <- 1
@@ -402,8 +404,10 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   # sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf
   # sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
   sFM <- 0.5 
+  selectivityCurve <- fixedFleetPars$selectivityCurve
+
   
-  if(sel=="Logistic"){
+  if(selectivityCurve=="Logistic"){
     if(is.null(fixedFleetPars)){
       sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf # Starting guesses
       sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
@@ -411,21 +415,23 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
     } else{ 
       Start <- log(c(sFM))  #tryFleetPars
     }
-  }else if(sel %in% c("Normal.sca", "Normal.loc", "logNorm", "Knife")){
+  }else if(selectivityCurve %in% c("Normal.sca", "Normal.loc", "logNorm", "Knife")){
     Start <- log(c(sFM))  #tryFleetPars
   }
   
   
   opt <- nlminb(Start, OptFunDome, LenDat=LenDat, 
                 fixedFleetPars=fixedFleetPars, StockPars=StockPars, 
-                SizeBins=SizeBins, mod=mod, sel=sel, 
+                SizeBins=SizeBins, mod=mod, 
                 control= list(iter.max=300, eval.max=400, abs.tol=1E-20))
   
+
   newFleet <- NULL 
+  newFleet$selectivityCurve <- selectivityCurve
   newFleet$FM <- exp(opt$par[1]) #changed to 1, previoulsy 3
   newNLL<-opt$objective
   
-  if(sel=="Logistic"){
+  if(selectivityCurve=="Logistic"){
     if(is.null(fixedFleetPars)){
       newFleet$SL1 <- exp(opt$par[2]) * StockPars$Linf 
       newFleet$SL2 <- newFleet$SL1 + exp(opt$par[3]) * StockPars$Linf
@@ -433,21 +439,24 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
       newFleet$SL1 <- fixedFleetPars$SL1
       newFleet$SL2 <- fixedFleetPars$SL2
     }
-  }else if(sel=="Knife"){
+  }else if(selectivityCurve=="Knife"){
     newFleet$MLLKnife <- fixedFleetPars$MLLKnife
-  } else if(sel %in% c("Normal.sca", "Normal.loc", "logNorm")){ # prescribed values, not optimised
+  } else if(selectivityCurve %in% c("Normal.sca", "Normal.loc", "logNorm")){ # prescribed values, not optimised
     newFleet$SL1 <- fixedFleetPars$SL1
     newFleet$SL2 <- fixedFleetPars$SL2
     newFleet$SLmesh <- fixedFleetPars$SLmesh
-    if(!is.null(fixedFleetPars$MLLNormal)) newFleet$MLLNormal <- fixedFleetPars$MLLNormal
+    if(!is.null(fixedFleetPars$SLMin)) newFleet$SLMin <- fixedFleetPars$SLMin
   }
   
-  if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, newFleet, SizeBins, sel)
-  if (mod == "LBSPR") runMod <- DomeLBSPRSim(StockPars, newFleet, SizeBins, sel)
+ 
+  if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, newFleet, SizeBins)
+  if (mod == "LBSPR") runMod <- GTGLBSPRSim(StockPars, newFleet, SizeBins)
+
   
   Out <- NULL 
   Out$Ests <- c(FM=newFleet$FM, SL1=newFleet$SL1, SL2=newFleet$SL2, 
-                SLmesh=newFleet$SLmesh,SPR=runMod$SPR)
+                SLmesh=newFleet$SLmesh, SLMin = newFleet$SLMin, SPR=runMod$SPR)
+  Out$SelectivityCurve <- selectivityCurve
   Out$PredLen <- runMod$LCatchFished * sum(LenDat)
   Out$NLL<-newNLL
   Out$opt_par<-opt$par
