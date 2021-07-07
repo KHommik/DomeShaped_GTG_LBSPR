@@ -407,8 +407,8 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   selectivityCurve <- fixedFleetPars$selectivityCurve
 
   
-  if(selectivityCurve=="Logistic"){
-    if(is.null(fixedFleetPars)){
+  if(fixedFleetPars$selectivityCurve=="Logistic"){
+    if(length(fixedFleetPars) == 1){
       sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf # Starting guesses
       sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
       Start <- log(c(sFM, sSL50, sDel))  #tryFleetPars
@@ -431,8 +431,8 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   newFleet$FM <- exp(opt$par[1]) #changed to 1, previoulsy 3
   newNLL<-opt$objective
   
-  if(selectivityCurve=="Logistic"){
-    if(is.null(fixedFleetPars)){
+  if(fixedFleetPars$selectivityCurve=="Logistic"){
+    if(length(fixedFleetPars) == 1){
       newFleet$SL1 <- exp(opt$par[2]) * StockPars$Linf 
       newFleet$SL2 <- newFleet$SL1 + exp(opt$par[3]) * StockPars$Linf
     } else{
