@@ -64,22 +64,22 @@ FleetPars <- NULL
 # "Dome-shaped selectivity in LB-SPR: Length-Based assessment of data-limited inland fish stocks sampled with gillnets"
 # https://www.sciencedirect.com/science/article/pii/S0165783620300916
 
-# dome-shaped selectivity shapes
+# dome-shaped selectivity curves
 # lognorm
-gearSelectivity <- "logNorm"
+FleetPars$selectivityCurve <- "logNorm"
 FleetPars$SL1 <- 10.43     # k_mode from SELECT (log-normal)
 FleetPars$SL2 <- 0.27      # standard deviation at log scale from SELECT
 
 # norm.loc
-#gearSelectivity <- "Normal.loc"
+#FleetPars$selectivityCurve <- "Normal.loc"
 #FleetPars$SL1 <- 9.52
 #FleetPars$SL2 <- 7.06
 
 # dome-shaped mesh specifications
 FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
-FleetPars$MLLNormal <- 23   # minimum landing limit (MLL)
+FleetPars$SLMin <- 23   # minimum landing limit (MLL)
 
-# other selectivity shapes
+# asymptotic selectivity curves
 # knife-edge
 #FleetPars$MLLKnife <- 23
 
@@ -102,30 +102,30 @@ if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnif
     SL50 <- FleetPars$SL1; SL95 <- FleetPars$SL2
     gearSelLen <- 1.0/(1+exp(-log(19)*(lengthFish-SL50)/((SL95)-(SL50)))) # Selectivity-at-Length
   }else if(gearSelectivity=="Normal.sca"){
-    SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; SLMin <- FleetPars$SLMin
     gearSelLen <- 0
     for (j in seq_along(SLmesh)){
       gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk1)*meshSize[j]))/((SLk2)^0.5*meshSize[j]))^2)
     }
-    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    if(!is.na(SLMin)) gearSelLen[lengthFish < SLMin] <- 0 
     gearSelLen <- gearSelLen/max(gearSelLen)
     
   }else if(gearSelectivity=="Normal.loc"){ 
-    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; SLMin <- FleetPars$SLMin
     gearSelLen <- 0
     for (j in seq_along(meshSize)){
       gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk)*meshSize[j]))/((SLsigma)))^2)
     }
-    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    if(!is.na(SLMin)) gearSelLen[lengthFish < SLMin] <- 0 
     gearSelLen <- gearSelLen/max(gearSelLen)
     
   }else if(gearSelectivity=="logNorm"){ 
-    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; MLLNormal <- FleetPars$MLLNormal
+    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; SLMin <- FleetPars$SLMin
     gearSelLen <- 0
     for (j in seq_along(meshSize)){
       gearSelLen <- gearSelLen + exp(-0.5*((log(lengthFish)-log((SLk)*meshSize[j]))/(SLsigma))^2)
     }
-    if(!is.na(MLLNormal)) gearSelLen[lengthFish < MLLNormal] <- 0 
+    if(!is.na(SLMin)) gearSelLen[lengthFish < SLMin] <- 0 
     gearSelLen <- gearSelLen/max(gearSelLen)
     
   }else if(gearSelectivity=="Knife"){    # knife-edge selectivity
@@ -165,16 +165,17 @@ points(LenMids, as.vector(table(cut(unlist(empLengthData), LenBins, right = FALS
 # test run LBSPR ####
 # estimation routine DoOpt
 StockPars$MK <- 1.8
-testOpt <- DoOptDome(StockPars, fixedFleetPars, LenDat, SizeBins, "GTG", gearSelectivity)
+testOpt <- DoOptDome(StockPars, fixedFleetPars, LenDat, SizeBins, "GTG")
 
 # estimation outputs (note SLmesh, SL1, SL2 may be fixed)
 testOpt$Ests
 
 
 # per recruit simulation based on FM etc. estimates
-FleetPars <- list(FM = testOpt$Ests[["FM"]], SL1 = testOpt$Ests[["SL1"]], SL2 =testOpt$Ests[["SL2"]],
-                  SLmesh = FleetPars$SLmesh, MLLNormal = FleetPars$MLLNormal)
-prSim <- GTGDomeLBSPRSim(StockPars, FleetPars, SizeBins, sel = gearSelectivity)
+FleetPars <- list(FM = testOpt$Ests[["FM"]], selectivityCurve = testOpt$SelectivityCurve, 
+                  SL1 = testOpt$Ests[["SL1"]], SL2 =testOpt$Ests[["SL2"]],
+                  SLmesh = FleetPars$SLmesh, SLMin = FleetPars$SLMin)
+prSim <- GTGDomeLBSPRSim(StockPars, FleetPars, SizeBins)
 sum(prSim$LCatchFished)
 
 # show predicted length
@@ -214,8 +215,8 @@ for (iLinf in seq_along(Linfseq)){
     GTGIn[iLinf,1,iMK] <- StockPars$MK
     GTGIn[iLinf,2,iMK] <- StockPars$Linf
     
-    runopt <- DoOptDome(StockPars, fixedFleetPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG", 
-                        sel = gearSelectivity) # this is the model; specify the selectivity ("Normal.sca"/"Normal.loc"/logNorm") 
+	# this is the estimation model; specify the selectivity ("Normal.sca"/"Normal.loc"/logNorm") in fixedFleetPars
+    runopt <- DoOptDome(StockPars, fixedFleetPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG")
     
     GTGOut[iLinf,1,iMK] <- runopt$NLL[1]
     GTGOut[iLinf,2,iMK] <- runopt$Ests[1]  #FM
