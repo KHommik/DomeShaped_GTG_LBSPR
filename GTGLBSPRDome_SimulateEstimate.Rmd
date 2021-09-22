@@ -1,0 +1,273 @@
+---
+title: "GTGLBSPRDome_SimulateEstimate.R"
+author: "Colm Fitzgerald"
+date: "9/22/2021"
+output: html_document
+---
+
+```{r packages_preliminaries, include = FALSE}
+library(plyr) 
+library(dplyr)
+library(ggplot2)
+library(rlist)
+library(kableExtra)
+
+# load GTG LB-SPR routines
+source("GTGLBSPR_Dome.R")
+set.seed(seed = 9999)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## GTG-LBSPR dome-shaped selectivity demonstration
+
+We demonstrate the dome-shaped selectivity adjustment to LB-SPR methodology described in the paper
+"Dome-shaped selectivity in LB-SPR: Length-Based assessment of data-limited inland fish stocks sampled with gillnets" found at <https://www.sciencedirect.com/science/article/pii/S0165783620300916> with a simple example. 
+
+### Alternative resources
+The development of the GTG-LBSPR methodology is described by Hordyk and Prince in the papers
+
+* Hordyk *et al.* (2015) "A novel length-based empirical estimation method..." <https://doi.org/10.1093/icesjms/fsu004> and
+* Hordyk *et al.* (2016) "A simple length-structured model based on life history ratios..." <https://doi.org/10.1139/cjfas-2015-0422>.
+
+Adrian Hordyk has shared apps (e.g. <https://github.com/AdrianHordyk/LBSPR_shiny>) and code (e.g. <https://github.com/AdrianHordyk/GTG_LBSPR>) on github.
+
+
+
+### GTG-LBSPR dome-shaped selectivity - data simulation
+
+We first specify a set of biological stock parameters for a synthetic population
+
+```{r StockPars, include = TRUE}
+# simulated stock parameters (similar to some Irish brown trout populations) ====
+StockPars <- NULL 
+StockPars$MK <- 2.0
+StockPars$NGTG <- 17
+StockPars$Linf <- 45.0
+StockPars$CVLinf <- 0.1
+StockPars$MaxSD <- 2
+StockPars$L50 <- 25.0  
+StockPars$L95 <- 30.0 
+StockPars$FecB <- 3 
+StockPars$Walpha <- 0.0084
+StockPars$Wbeta <- 3.1115
+StockPars$Steepness <- 0.8 
+StockPars$Mpow <- 0
+```
+
+and we also specify the length bins to have an increment of one unit (considered to be centimetres).
+
+```{r SizeBins, include = TRUE}
+SizeBins <- NULL
+SizeBins$Linc <- 1
+SizeBins$ToSize <- StockPars$Linf*(1+StockPars$MaxSD*StockPars$CVLinf)
+```
+
+The fishing gear selectivity parameters are particularly important. Instead of using a range of mesh sizes as in the paper "Dome-shaped selectivity in LBSPR...", we simply use a single unit mesh size and specify a **lognormal** dome-shaped selection curve. 
+
+```{r FleetPars, include = FALSE, echo = FALSE}
+# dome-shaped selectivity curves
+
+# dome-shaped mesh specifications
+FleetPars <- list(SLmesh = 1.0)  # single mesh size
+
+# lognorm
+FleetPars$selectivityCurve <- "logNorm"
+FleetPars$SL1 <- 23.0     # k_mode from SELECT (log-normal) - mode of lognormal distribution
+FleetPars$SL2 <- 0.4      # standard deviation at log scale
+# sum_j exp(-0.5*((log(lengthFish)-log((SL1)*meshSize[j]))/(SL2))^2)
+
+
+# norm.loc
+#FleetPars$selectivityCurve <- "Normal.loc"
+#FleetPars$SL1 <- 23
+#FleetPars$SL2 <- 7.0
+
+FleetPars$SLMin <- 0   # minimum landing limit (MLL)
+
+
+# candidate asymptotic selectivity curves
+# logistic
+FleetParsLogistic <- NULL
+FleetParsLogistic$selectivityCurve <- "Logistic"
+FleetParsLogistic$SL1 <- 15.0
+FleetParsLogistic$SL2 <- 20.0
+```
+
+The dome-shaped selectivity curve has a modal value of `FleetPars$SL1 <- 23.0` and has a selectivity-at-length curve as follows
+```{r visualise, echo = FALSE}
+
+# calculate selectivity at length *IF* appropriate parameters are specified
+lengthFish <- seq(0, StockPars$Linf*(1 + StockPars$CVLinf*StockPars$MaxSD), length.out = 101)
+if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
+  
+if(FleetPars$selectivityCurve=="logNorm"){ 
+    SLk <- FleetPars$SL1; SLsigma <- FleetPars$SL2; SLMin <- FleetPars$SLMin
+    gearSelLen <- 0
+    for (j in seq_along(meshSize)){
+      gearSelLen <- gearSelLen + exp(-0.5*((log(lengthFish)-log((SLk)*meshSize[j]))/(SLsigma))^2)
+    }
+    if(!is.na(SLMin)) gearSelLen[lengthFish < SLMin] <- 0 
+    gearSelLen <- gearSelLen/max(gearSelLen)
+    
+}
+
+
+# plot selectivity line
+ggplot() + 
+  geom_line(data = data.frame(length = lengthFish, selectivity = gearSelLen),
+            aes(x = length, y = selectivity), colour = "black", linetype = 1, size = 1.25) + 
+  scale_x_continuous(limits = c(0, 60), breaks = seq(0,60,10)) +
+  theme_bw()
+
+```
+
+
+We simulate catch from this population with a prescribed fishing mortality ratio of F/M = `FleetPars$FM <- 1.0` using multinomial random draws. The expected probabilities of a captured fish being from a particular length bin are obtained from the (per-recruit theory) expected catch-at-length for the fished/vulnerable population obtained. This per-recruit theory is implemented in  GTG-LBSPR simulation routine. The length-structure of the fished and unfished catch and total population are shown below. 
+
+```{r simulate_lbspr, echo = FALSE}
+FleetPars$FM <- 1.0
+simGTG <- GTGDomeLBSPRSim(StockPars, FleetPars, SizeBins = NULL)
+
+# outputs
+expectedCatchAtLengthFished <- simGTG$LCatchFished
+expectedCatchAtLengthUnfished <- simGTG$LCatchUnfished
+# NatLCatch etc. contain NGTG columns of length data
+
+
+par(mfrow = c(2,1), mgp = c(2,1,0), mar = c(3,3,2,1) + 0.1)
+# plot catch length structure
+plot(simGTG$LenMids, simGTG$LCatchFished/max(simGTG$LCatchFished), 
+     col = "black", type = "l", lwd = 1.5,
+     xlab = "length mid", ylab = "catch proportions")
+points(simGTG$LenMids, simGTG$LCatchFished/max(simGTG$LCatchFished), pch = 16, col = "black")
+lines(simGTG$LenMids, simGTG$LCatchUnfished/max(simGTG$LCatchUnfished), col = "grey", type = "l", lwd = 1.5)
+points(simGTG$LenMids, simGTG$LCatchUnfished/max(simGTG$LCatchUnfished), pch = 1, col = "grey")
+legend("topright", c("fished", "unfished"), col = c("black", "grey"), lty = c(1,1))
+
+# plot population length structure
+plot(simGTG$LenMids, simGTG$LPopFished/max(simGTG$LPopFished), 
+     col = "black", type = "l", lwd = 1.5,
+     xlab = "length mid", ylab = "population (per-recruit)")
+lines(simGTG$LenMids, simGTG$LPopUnfished/max(simGTG$LPopUnfished), col = "grey", type = "l", lwd = 1.5)
+legend("topright", c("fished", "unfished"), col = c("black", "grey"), lty = c(1,1))
+
+```
+
+```{r multinomial_specs, echo = FALSE}
+# random sample of vulnerable population length structure
+nFish <- 500
+sampleCatch <- data.frame(lengthFish = simGTG$LenMids)
+
+# multinomial sampler
+sampleCatch$numbersCatch <- rmultinom(1, nFish, simGTG$LCatchFished)
+```
+
+We then generate a random sample of `nFish` fish from a multinomial distribution with expected length bin proportions obtained from the per recruit simulation. A single realisation of the multnomial draw is as follows.
+```{r plot_multinomial_sample, echo = FALSE}
+ggplot(sampleCatch) + 
+  geom_col(aes(x = lengthFish, y = numbersCatch), fill = "grey50") + 
+  theme_bw()
+```
+
+This synthetic data is now used in the estimation model with both correctly specified fishing gear selectivity (dome-shaped) and mis-specified fishing gear selectivity (logistic). It is worth noting the "true" values of fishing mortality and SPR before we compare to the estimation model....
+```{r, echo = TRUE}
+truePars <- list(selectivityCurve = FleetPars$selectivityCurve,
+                 SL1 = FleetPars$SL1, SL2 = FleetPars$SL2, SLmesh = FleetPars$SLmesh,
+                 SLMin = FleetPars$SLMin, 
+                 MK = StockPars$MK,
+                 FM = FleetPars$FM,
+                 SPR = simGTG$SPR)
+truePars
+```
+
+
+### GTG-LBSPR dome-shaped selectivity - estimation
+
+We provide correctly specified biological stock parameters and (fixed) fishing gear parameters to the GTG-LBSPR estimation model. The estimation model for dome-shaped selectivity curves estimates **only** the fishing mortality ratio $F/m$. The selectivity-at-length parameters are fixed.
+
+```{r lbspr_estimation, echo = TRUE}
+# initialise length bins, stock pars, fishing gear pars
+SizeBinsEstimate <- SizeBins
+StockParsEstimate <- StockPars
+fixedFleetParsEstimate <- FleetPars[c("selectivityCurve", "SL1", "SL2", "SLmesh", "SLMin")]
+# estimate FM, calculate SPR with GTG-LBSPR
+lbsprEstimate <- DoOptDome(StockPars = StockParsEstimate, 
+                           fixedFleetPars = fixedFleetParsEstimate, 
+                           LenDat = sampleCatch$numbersCatch, 
+                           SizeBins = SizeBinsEstimate, "GTG")
+lbsprEstimate$Ests
+```
+
+The simulated length data provides a good opportunity to explore the influence of an underlying dome-shaped selectivity on LB-SPR estimates of $F/M$ and SPR when a logistic selection curve is assumed. First, we fully specify a logistic selection curve (i.e, the length-at-50% and 95% selectivity parameters are fixed and not estimated from the model). The logistic selectivity parameters are chosen so that the left (ascending) limb of logistic curve closely follows that of the dome-shaped selectivity curve.
+
+```{r, include = FALSE, echo = TRUE}
+# logistic selection curve
+FleetParsLogistic <- list(selectivityCurve = "Logistic", SL1 = 15.0, SL2 = 20.0)
+
+# selectivity-at-length for (alternate) logistic curve
+SL50 <- FleetParsLogistic$SL1; SL95 <- FleetParsLogistic$SL2
+logisticGearSelLen = 1.0/(1+exp(-log(19)*(lengthFish-SL50)/((SL95)-(SL50))))
+```
+
+```{r compare_selectivity_curves, echo = FALSE}
+gearSelectivityAtL <- 
+  rbind(data.frame(length = lengthFish, selectivity = gearSelLen, curve = "lognorm"),
+        data.frame(length = lengthFish, selectivity = logisticGearSelLen, curve = "logistic")
+        )
+
+ggplot(gearSelectivityAtL) + 
+  geom_line(aes(x = length, y = selectivity, colour = curve), linetype = 1, size = 1.25) +
+  scale_colour_grey(start = 0.8, end = 0.2) + 
+  theme_bw()
+```
+
+```{r lbspr_estimation_logistic, echo = TRUE}
+# initialise length bins, stock pars, fishing gear pars
+SizeBinsEstimate <- SizeBins
+StockParsEstimate <- StockPars
+fixedFleetParsLogistic <- FleetParsLogistic[c("selectivityCurve", "SL1", "SL2")]
+# estimate FM, calculate SPR with GTG-LBSPR
+lbsprLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate, 
+                           fixedFleetPars = fixedFleetParsLogistic, 
+                           LenDat = sampleCatch$numbersCatch, 
+                           SizeBins = SizeBinsEstimate, "GTG")
+lbsprLogisticEstimate$Ests
+```
+
+Parameter estimation and status assessment based on a mis-specified logistic curve perfectly illustrates how dome-shaped gear selection may bias estimates of fishing mortality towards higher values and estimates of SPR towards lower values when logistic (trawl-like) selection curves is assumed in the LB-SPR assessment. 
+
+The full estimation method for logistic selectivity, where SL50 and SL95 are free to change in the optimisation process, has not been considered here but can easily be handled in the dome-shaped adjustment of the method. 
+```{r lbspr_full_estimation_logistic, echo = TRUE}
+# initialise length bins, stock pars, fishing gear pars
+SizeBinsEstimate <- SizeBins
+StockParsEstimate <- StockPars
+fixedFleetParsFullLogistic <- FleetParsLogistic[c("selectivityCurve")] # only fixed parameter is the selectivityCurve
+# estimate FM, SL50, SL95, calculate SPR with GTG-LBDPR
+lbsprFullLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate, 
+                           fixedFleetPars = fixedFleetParsLogistic, 
+                           LenDat = sampleCatch$numbersCatch, 
+                           SizeBins = SizeBinsEstimate, "GTG")
+lbsprFullLogisticEstimate$Ests
+```
+
+
+It is useful to summarise the results in a table.
+```{r tabulate_data, include=FALSE}
+tableData <- rbind(
+  data.frame(parameters = "true", truePars[c("selectivityCurve", "SL1", "SL2", "SLmesh", "MK", "FM", "SPR")]),
+  data.frame(parameters = "estimated", fixedFleetParsEstimate[c("selectivityCurve", "SL1", "SL2", "SLmesh")], MK= StockPars$MK, FM = lbsprEstimate$Ests["FM"], SPR = lbsprEstimate$Ests["SPR"]), 
+  data.frame(parameters = "estimated", fixedFleetParsLogistic[c("selectivityCurve", "SL1", "SL2")], SLmesh = 1, MK= StockPars$MK, FM = lbsprLogisticEstimate$Ests["FM"], SPR = lbsprLogisticEstimate$Ests["SPR"]), 
+  data.frame(parameters = "estimated", fixedFleetParsFullLogistic["selectivityCurve"], SL1 = lbsprFullLogisticEstimate$Ests["SL1"], SL2 = lbsprFullLogisticEstimate$Ests["SL2"], SLmesh = 1, MK= StockPars$MK, FM = lbsprFullLogisticEstimate$Ests["FM"], SPR = lbsprFullLogisticEstimate$Ests["SPR"])
+)
+row.names(tableData)<- NULL
+
+kable_out <- knitr::kable(tableData, "html") %>%
+  kable_styling("striped")
+```
+
+```{r kable_out, include = TRUE, results = 'asis'}
+kable_out
+```
