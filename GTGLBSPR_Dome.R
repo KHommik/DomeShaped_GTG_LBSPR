@@ -324,6 +324,7 @@ GTGDomeLBSPRSim <- function(StockPars, FleetPars, SizeBins=NULL)  {
   Output$L95GTG <- L95GTG
   Output$SPRatsize <- SPRatsize
   Output$RelRec <- RelRec
+  sink(type = "message")
   return(Output)
 }
 
@@ -340,7 +341,8 @@ OptFunDome <- function(tryFleetPars, fixedFleetPars, LenDat, StockPars, SizeBins
   Fleet <- NULL
   Fleet$selectivityCurve <- fixedFleetPars$selectivityCurve
   if(Fleet$selectivityCurve=="Logistic"){
-    if(length(tryFleetPars) == 3 & length(fixedFleetPars) == 1 & names(fixedFleetPars) == "selectivityCurve"){
+    if(length(tryFleetPars) == 3 & length(fixedFleetPars) == 1 & 
+       c("selectivityCurve") %in% names(fixedFleetPars)){
       Fleet$SL1 <- exp(tryFleetPars[2]) * StockPars$Linf
       Fleet$SL2 <- Fleet$SL1  + (exp(tryFleetPars[3]) * StockPars$Linf)
     } else {
@@ -460,5 +462,6 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   Out$PredLen <- runMod$LCatchFished * sum(LenDat)
   Out$NLL<-newNLL
   Out$opt_par<-opt$par
+  Out$nlminbOut <- opt
   return(Out)
 }
