@@ -96,7 +96,7 @@ FleetParsLogistic$SL1 <- 15.0
 FleetParsLogistic$SL2 <- 20.0
 ```
 
-The dome-shaped selectivity curve has a modal value of `FleetPars$SL1 <- 23.0` and has a selectivity-at-length curve as follows
+The dome-shaped selectivity curve has a modal value of `FleetPars$SL1` and has a selectivity-at-length curve as follows
 ```{r visualise, echo = FALSE}
 
 # calculate selectivity at length *IF* appropriate parameters are specified
@@ -125,7 +125,7 @@ ggplot() +
 ```
 
 
-We simulate catch from this population with a prescribed fishing mortality ratio of F/M = `FleetPars$FM <- 1.0` using multinomial random draws. The expected probabilities of a captured fish being from a particular length bin are obtained from the (per-recruit theory) expected catch-at-length for the fished/vulnerable population obtained. This per-recruit theory is implemented in  GTG-LBSPR simulation routine. The length-structure of the fished and unfished catch and total population are shown below. 
+We simulate catch from this population with a prescribed fishing mortality ratio of F/M = `FleetPars$FM <- 1.0` using multinomial random draws. The expected probabilities of a captured fish being from a particular length bin are obtained from the (per-recruit theory) expected catch-at-length for the fished/vulnerable population. This per-recruit theory is implemented in the  GTG-LBSPR simulation routine. The length-structure of the fished and unfished catch and total population are shown below. 
 
 ```{r simulate_lbspr, echo = FALSE}
 FleetPars$FM <- 1.0
@@ -156,17 +156,15 @@ legend("topright", c("fished", "unfished"), col = c("black", "grey"), lty = c(1,
 
 ```
 
-```{r multinomial_specs, echo = FALSE}
+We then generate a random sample of `nFish` fish from a multinomial distribution with expected length bin proportions obtained from the per recruit simulation. A single realisation of the multnomial draw is as follows.
+```{r multinomial_sample, echo = FALSE}
 # random sample of vulnerable population length structure
 nFish <- 500
 sampleCatch <- data.frame(lengthFish = simGTG$LenMids)
 
 # multinomial sampler
 sampleCatch$numbersCatch <- rmultinom(1, nFish, simGTG$LCatchFished)
-```
 
-We then generate a random sample of `nFish` fish from a multinomial distribution with expected length bin proportions obtained from the per recruit simulation. A single realisation of the multnomial draw is as follows.
-```{r plot_multinomial_sample, echo = FALSE}
 ggplot(sampleCatch) + 
   geom_col(aes(x = lengthFish, y = numbersCatch), fill = "grey50") + 
   theme_bw()
@@ -186,7 +184,8 @@ truePars
 
 ### GTG-LBSPR dome-shaped selectivity - estimation
 
-We provide correctly specified biological stock parameters and (fixed) fishing gear parameters to the GTG-LBSPR estimation model. The estimation model for dome-shaped selectivity curves estimates **only** the fishing mortality ratio $F/m$. The selectivity-at-length parameters are fixed.
+#### True dome-shaped (lognormal) selectivity curve
+We provide correctly specified biological stock parameters and (fixed) fishing gear parameters to the GTG-LBSPR estimation model. The estimation model for dome-shaped selectivity curves estimates **only** the fishing mortality ratio $F/M$. The selectivity-at-length parameters are fixed.
 
 ```{r lbspr_estimation, echo = TRUE}
 # initialise length bins, stock pars, fishing gear pars
@@ -200,7 +199,9 @@ lbsprEstimate <- DoOptDome(StockPars = StockParsEstimate,
                            SizeBins = SizeBinsEstimate, "GTG")
 lbsprEstimate$Ests
 ```
+The estimated fishing mortality ratio and SPR values are reasonably close to the true values for most realisations of the random multinomial draw of `nFish` lengths. More accurate estimation model results can be obtained by increasing the sample size of the simulated catch.
 
+#### Mis-specified selectivity curve - fixed logistic curve
 The simulated length data provides a good opportunity to explore the influence of an underlying dome-shaped selectivity on LB-SPR estimates of $F/M$ and SPR when a logistic selection curve is assumed. First, we fully specify a logistic selection curve (i.e, the length-at-50% and 95% selectivity parameters are fixed and not estimated from the model). The logistic selectivity parameters are chosen so that the left (ascending) limb of logistic curve closely follows that of the dome-shaped selectivity curve.
 
 ```{r, include = FALSE, echo = TRUE}
@@ -237,8 +238,9 @@ lbsprLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate,
 lbsprLogisticEstimate$Ests
 ```
 
-Parameter estimation and status assessment based on a mis-specified logistic curve perfectly illustrates how dome-shaped gear selection may bias estimates of fishing mortality towards higher values and estimates of SPR towards lower values when logistic (trawl-like) selection curves is assumed in the LB-SPR assessment. 
+Parameter estimation and status assessment based on a mis-specified logistic curve clearly illustrates how dome-shaped gear selection may bias estimates of fishing mortality towards higher values and estimates of SPR towards lower values when logistic (trawl-like) selection curves is assumed in the LB-SPR assessment. 
 
+#### Mis-specified logistic curve - free selectivity-at-length parameters
 The full estimation method for logistic selectivity, where SL50 and SL95 are free to change in the optimisation process, has not been considered here but can easily be handled in the dome-shaped adjustment of the method. 
 ```{r lbspr_full_estimation_logistic, echo = TRUE}
 # initialise length bins, stock pars, fishing gear pars
@@ -247,14 +249,14 @@ StockParsEstimate <- StockPars
 fixedFleetParsFullLogistic <- FleetParsLogistic[c("selectivityCurve")] # only fixed parameter is the selectivityCurve
 # estimate FM, SL50, SL95, calculate SPR with GTG-LBDPR
 lbsprFullLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate, 
-                           fixedFleetPars = fixedFleetParsLogistic, 
+                           fixedFleetPars = fixedFleetParsFullLogistic, 
                            LenDat = sampleCatch$numbersCatch, 
                            SizeBins = SizeBinsEstimate, "GTG")
 lbsprFullLogisticEstimate$Ests
 ```
 
 
-It is useful to summarise the results in a table.
+We summarise the results in a table.
 ```{r tabulate_data, include=FALSE}
 tableData <- rbind(
   data.frame(parameters = "true", truePars[c("selectivityCurve", "SL1", "SL2", "SLmesh", "MK", "FM", "SPR")]),
@@ -263,7 +265,7 @@ tableData <- rbind(
   data.frame(parameters = "estimated", fixedFleetParsFullLogistic["selectivityCurve"], SL1 = lbsprFullLogisticEstimate$Ests["SL1"], SL2 = lbsprFullLogisticEstimate$Ests["SL2"], SLmesh = 1, MK= StockPars$MK, FM = lbsprFullLogisticEstimate$Ests["FM"], SPR = lbsprFullLogisticEstimate$Ests["SPR"])
 )
 row.names(tableData)<- NULL
-
+colnames(tableData) <- c("parameters", "selectivityCurve", "SL1", "SL2", "SLmesh", "M/K", "F/M", "SPR")
 kable_out <- knitr::kable(tableData, "html") %>%
   kable_styling("striped")
 ```
