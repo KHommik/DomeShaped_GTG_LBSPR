@@ -25,7 +25,7 @@ We also support multiple mesh sizes; however, the demonstration code GTGLBSPR_Do
 GTGLBSPR_Dome.R contains the GTG-LBSPR code including 
  * the per-recruit simulation (operating model) function **GTGDomeLBSPRSim(StockPars, FleetPars, SizeBins)**;
  * the top-level estimation model optimisation function **DoOptDome(StockPars, fixedFleetPars, LenDat, SizeBins, mod)** which requires length composition data LenDat. This function calls optimisation routine nlminb which seeks to minimise the difference between length composition data and expected (per-recruit theory) length composition.
- * the negative log-likelihood calculation function (multinomial likelihood) which calculates the goodness-of-fit of the expected per-recruit length composition (estimated from FM and selectivity-at-length parameters) to the actual length data.
+ * the negative log-likelihood calculation function (multinomial likelihood) **OptFunDome(tryFleetPars, fixedFleetPars, LenDat,...)** which calculates the goodness-of-fit of the expected per-recruit length composition (estimated from FM and selectivity-at-length parameters) to the actual length data.
 
 
 GTGLBSPRDome_SimulateEstimate.Rmd
