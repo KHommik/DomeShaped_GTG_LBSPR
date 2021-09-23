@@ -31,6 +31,9 @@ GTGLBSPR_Dome.R contains the GTG-LBSPR code including
 GTGLBSPRDome_SimulateEstimate.Rmd
 * demonstrates the dome-shaped selectivity estimation approach using simulated data.
 
+GTGLBSPR_Dome_ModelRun.Rmd
+* demonstrates a model run based on trout data from Glen Lough as detailed by Hommik et al. (2020). This model run also features multiple mesh sizes when specifying the dome shaped curve. Data may be provided on request.
+
 ## Resources
 
 * **Publication** Hommik, K., Fitzgerald C. J., Kelly, F. K. and Shephard, S. Dome-shaped selectivity in LB-SPR: Length-Based assessment of data-limited inland fish stocks sampled with gillnets. <https://doi.org/10.1016/j.fishres.2020.105574>
