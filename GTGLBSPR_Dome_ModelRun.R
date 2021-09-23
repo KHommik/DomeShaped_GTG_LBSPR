@@ -85,9 +85,12 @@ FleetPars$SLMin <- 23   # minimum landing limit (MLL)
 
 # logistic
 #FleetPars <- NULL
-#gearSelectivity <- "Logistic"
+# FleetPars$selectivityCurve <- "Logistic"
 # FleetPars$SL1 <- 75.0
 # FleetPars$SL2 <- 90.0
+
+gearSelectivity <- FleetPars$selectivityCurve
+
 
 
 # preliminary visualisation of selectivity ####
@@ -232,3 +235,4 @@ results_glen <- adply(GTGOut,c(1,3))
 input_glen <- adply(GTGIn,c(1,3))
 
 final_glen <- cbind(results_glen, input_glen)
+final_glen
