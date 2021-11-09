@@ -71,9 +71,15 @@ FleetPars$SL1 <- 10.43     # k_mode from SELECT (log-normal)
 FleetPars$SL2 <- 0.27      # standard deviation at log scale from SELECT
 
 # norm.loc
-#FleetPars$selectivityCurve <- "Normal.loc"
-#FleetPars$SL1 <- 9.52
-#FleetPars$SL2 <- 7.06
+# FleetPars$selectivityCurve <- "Normal.loc"
+# FleetPars$SL1 <- 9.52
+# FleetPars$SL2 <- 7.06
+
+# norm.sca
+# FleetPars$selectivityCurve <- "Normal.sca"
+# FleetPars$SL1 <- 11.57
+# FleetPars$SL2 <- 8.85
+
 
 # dome-shaped mesh specifications
 FleetPars$SLmesh <- c(1.25, 1.55, 1.95, 2.4, 2.9, 3.5, 4.3, 5.5) # used mesh sizes
@@ -90,7 +96,7 @@ FleetPars$SLMin <- 23   # minimum landing limit (MLL)
 # FleetPars$SL2 <- 90.0
 
 gearSelectivity <- FleetPars$selectivityCurve
-
+if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
 
 
 # preliminary visualisation of selectivity ####
@@ -99,7 +105,6 @@ gearSelectivity <- FleetPars$selectivityCurve
 if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnife))){
   
   lengthFish <- seq(0, StockPars$Linf*(1 + StockPars$CVLinf*StockPars$MaxSD), length.out = 101)
-  if(!is.null(FleetPars$SLmesh)) meshSize <- FleetPars$SLmesh
   
   if(gearSelectivity == "Logistic"){
     SL50 <- FleetPars$SL1; SL95 <- FleetPars$SL2
@@ -107,7 +112,7 @@ if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnif
   }else if(gearSelectivity=="Normal.sca"){
     SLk1 <- FleetPars$SL1; SLk2 <- FleetPars$SL2; SLMin <- FleetPars$SLMin
     gearSelLen <- 0
-    for (j in seq_along(SLmesh)){
+    for (j in seq_along(meshSize)){
       gearSelLen <- gearSelLen + exp(-0.5*((lengthFish-((SLk1)*meshSize[j]))/((SLk2)^0.5*meshSize[j]))^2)
     }
     if(!is.na(SLMin)) gearSelLen[lengthFish < SLMin] <- 0 
@@ -148,6 +153,26 @@ if(!(is.null(FleetPars$SL1) & is.null(FleetPars$SL2) & is.null(FleetPars$MLLKnif
 
 # gear/fleet parameters  are considered "fixed" - not optmised when fitting to data
 fixedFleetPars <- FleetPars
+
+
+# alternative approach
+selectivityLengthMesh <- function(SLmesh = 1, LenMids, gearSelectivity, SL1, SL2, SLMin = NULL){
+  selLen <- switch(gearSelectivity, 
+                   Logistic = 1.0/(1+exp(-log(19)*(LenMids-SL1)/(SL2-SL1))),
+                   logNorm = exp(-0.5*((log(LenMids)-log((SL1)*SLmesh))/(SL2))^2), 
+                   Normal.loc = exp(-0.5*((LenMids-(SL1*SLmesh))/(SL2))^2),
+                   Normal.sca = exp(-0.5*((LenMids-(SL1*SLmesh))/(SL2^0.5*SLmesh))^2) # from Millar & Holst 1997
+  )
+  if(!is.null(SLMin)) selLen[LenMids < SLMin] <- 0
+  return(selLen)
+}
+
+vulLenMesh <- sapply(FleetPars$SLmesh, FUN = selectivityLengthMesh, LenMids = lengthFish, 
+                     gearSelectivity = FleetPars$selectivityCurve, 
+                     SL1 = FleetPars$SL1,  SL2 = FleetPars$SL2, SLMin = FleetPars$SLMin)
+
+plot(lengthFish, rowSums(vulLenMesh)/max(rowSums(vulLenMesh)), type = "p", pch = 1)
+lines(lengthFish, gearSelLen, lty =2, col = "black", lwd = 1.5)
 
 
 # apply LB-SPR: test run ====
