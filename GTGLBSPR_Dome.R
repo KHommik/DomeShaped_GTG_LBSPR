@@ -436,12 +436,14 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
                  hessian = TRUE)
   }
   
+  # negative log-likelihood
+  newNLL<-opt$value # replaces objective in nlminb
   
+  
+  # back-transform MLE
   newFleet <- NULL 
   newFleet$selectivityCurve <- selectivityCurve
   newFleet$FM <- exp(opt$par[1])
-  newNLL<-opt$value # replaces objective in nlminb
-  
   if(fixedFleetPars$selectivityCurve=="Logistic"){
     if(length(fixedFleetPars) == 1){
       newFleet$SL1 <- exp(opt$par[2]) * StockPars$Linf 
@@ -459,6 +461,20 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
     if(!is.null(fixedFleetPars$SLMin)) newFleet$SLMin <- fixedFleetPars$SLMin
   }
   
+  # delta method to approximate standard error, CIs of estimates
+  varcov <- solve(opt$hessian) # varcov = inverse of the hessian
+
+  # estimators are log(F/M)
+  stderr <- c(sqrt(exp(opt$par[1])*varcov[1,1]))
+  names(stderr) = "FM"
+  if(fixedFleetPars$selectivityCurve=="Logistic" && length(fixedFleetPars) == 1){
+    # log(SL50/Linf), log((SL95-SL50)/Linf) in log-space
+    stderrSL50 <- sqrt((StockPars$Linf*exp(opt$par[2]))^2*varcov[2,2])
+    stderrSL95 <- sqrt((StockPars$Linf^2)*exp(opt$par[2])^2*varcov[2,2] + 
+                     exp(opt$par[3])^2*varcov[3,3] + 2*exp(opt$par[3])*exp(opt$par[2])*varcov[2,3])
+    stderr <-  c(stderr, SL50 = stderrSL50, SL95 = stderrSL95)
+  } 
+  
  
   if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, newFleet, SizeBins)
   if (mod == "LBSPR") runMod <- GTGLBSPRSim(StockPars, newFleet, SizeBins)
@@ -467,6 +483,7 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   Out <- NULL 
   Out$Ests <- c(FM=newFleet$FM, SL1=newFleet$SL1, SL2=newFleet$SL2, 
                 SLmesh=newFleet$SLmesh, SLMin = newFleet$SLMin, SPR=runMod$SPR)
+  Out$StdErr <- stderr
   Out$SelectivityCurve <- selectivityCurve
   Out$PredLen <- runMod$LCatchFished * sum(LenDat)
   Out$NLL <- newNLL
