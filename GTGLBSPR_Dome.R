@@ -402,36 +402,45 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   LenBins <- seq(from=0, by=Linc, to=ToSize)	
   LenMids <- seq(from=0.5*Linc, by=Linc, length.out=length(LenBins)-1)
   
-  # Starting guesses
+  # control parameters
+  control_opt <- list(maxit = 500, reltol = 1e-8, REPORT = 10, trace = 1)
+  
+    # Starting guesses
   # sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf
   # sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
-  sFM <- 0.5 
+ 
   selectivityCurve <- fixedFleetPars$selectivityCurve
-
+  sFM <- 0.5
   
-  if(fixedFleetPars$selectivityCurve=="Logistic"){
-    if(length(fixedFleetPars) == 1){
-      sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf # Starting guesses
-      sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
-      Start <- log(c(sFM, sSL50, sDel))  #tryFleetPars
-    } else{ 
-      Start <- log(c(sFM))  #tryFleetPars
-    }
-  }else if(selectivityCurve %in% c("Normal.sca", "Normal.loc", "logNorm", "Knife")){
+  if(fixedFleetPars$selectivityCurve=="Logistic" && length(fixedFleetPars) == 1){ # general logistic
+    # Starting guesses
+    sSL50 <- LenMids[which.max(LenDat)]/StockPars$Linf 
+    sDel <- 0.2 * LenMids[which.max(LenDat)]/StockPars$Linf
+    Start <- log(c(sFM, sSL50, sDel))  #tryFleetPars
+    # lowerBound <- c(-Inf, log(0.01), 0.0 ) # not used in BFGS optime
+    # upperBound <- c(Inf, log(1+StockPars$CVLinf*StockPars$MaxSD), 1.0) # not used in BFGS optim
+    methodOpt <- "BFGS"
+    opt <- optim(par = Start, fn = OptFunDome, gr = NULL, 
+                 fixedFleetPars=fixedFleetPars, LenDat=LenDat, StockPars=StockPars, SizeBins=SizeBins, mod=mod, 
+                 method = methodOpt, control= list(maxit=500, abstol=1E-20),
+                 hessian = TRUE)
+  } else{ # dome-shaped or fixed selectivity logistic
     Start <- log(c(sFM))  #tryFleetPars
+    lowerBound <- -20
+    upperBound <- 20
+    methodOpt <- "Brent"
+    opt <- optim(par = Start, fn = OptFunDome, gr = NULL, 
+                 fixedFleetPars=fixedFleetPars, LenDat=LenDat, StockPars=StockPars, SizeBins=SizeBins, mod=mod, 
+                 method = methodOpt, lower = lowerBound, upper = upperBound, 
+                 control= list(maxit=500, abstol=1E-20),
+                 hessian = TRUE)
   }
   
   
-  opt <- nlminb(Start, OptFunDome, LenDat=LenDat, 
-                fixedFleetPars=fixedFleetPars, StockPars=StockPars, 
-                SizeBins=SizeBins, mod=mod, 
-                control= list(iter.max=300, eval.max=400, abs.tol=1E-20))
-  
-
   newFleet <- NULL 
   newFleet$selectivityCurve <- selectivityCurve
-  newFleet$FM <- exp(opt$par[1]) #changed to 1, previoulsy 3
-  newNLL<-opt$objective
+  newFleet$FM <- exp(opt$par[1])
+  newNLL<-opt$value # replaces objective in nlminb
   
   if(fixedFleetPars$selectivityCurve=="Logistic"){
     if(length(fixedFleetPars) == 1){
@@ -460,8 +469,8 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
                 SLmesh=newFleet$SLmesh, SLMin = newFleet$SLMin, SPR=runMod$SPR)
   Out$SelectivityCurve <- selectivityCurve
   Out$PredLen <- runMod$LCatchFished * sum(LenDat)
-  Out$NLL<-newNLL
-  Out$opt_par<-opt$par
-  Out$nlminbOut <- opt
+  Out$NLL <- newNLL
+  Out$opt_par <- opt$par
+  Out$optimOut <- opt
   return(Out)
 }
