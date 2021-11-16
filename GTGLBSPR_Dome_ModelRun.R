@@ -3,8 +3,7 @@
 #################################
 
 library(plyr) 
-library(dplyr)
-library(ggplot2)
+library(tidyverse)
 library(rlist)
 
 # load GTG LB-SPR routines
@@ -196,13 +195,16 @@ StockPars$MK <- 1.8
 testOpt <- DoOptDome(StockPars, fixedFleetPars, LenDat, SizeBins, "GTG")
 
 # estimation outputs (note SLmesh, SL1, SL2 may be fixed)
-testOpt$Ests
+testOpt$lbPars
 
 
 # per recruit simulation based on FM etc. estimates
-FleetPars <- list(FM = testOpt$Ests[["FM"]], selectivityCurve = testOpt$SelectivityCurve, 
-                  SL1 = testOpt$Ests[["SL1"]], SL2 =testOpt$Ests[["SL2"]],
-                  SLmesh = FleetPars$SLmesh, SLMin = FleetPars$SLMin)
+FleetPars <- list(FM = testOpt$lbPars[["F/M"]], 
+                  selectivityCurve = testOpt$fixedFleetPars$selectivityCurve, 
+                  SL1 = ifelse("SL50" %in% names(testOpt$lbPars), testOpt$lbPars[["SL50"]], testOpt$fixedFleetPars[["SL1"]]), 
+                  SL2 = ifelse("SL95" %in% names(testOpt$lbPars), testOpt$lbPars[["SL95"]], testOpt$fixedFleetPars[["SL2"]]),
+                  SLmesh = testOpt$fixedFleetPars$SLmesh, 
+                  SLMin = testOpt$fixedFleetPars$SLMin)
 prSim <- GTGDomeLBSPRSim(StockPars, FleetPars, SizeBins)
 sum(prSim$LCatchFished)
 
@@ -244,15 +246,15 @@ for (iLinf in seq_along(Linfseq)){
     GTGIn[iLinf,2,iMK] <- StockPars$Linf
     
 	# this is the estimation model; specify the selectivity ("Normal.sca"/"Normal.loc"/logNorm") in fixedFleetPars
-    runopt <- DoOptDome(StockPars, fixedFleetPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG")
+    runOpt <- DoOptDome(StockPars, fixedFleetPars, LenDat=LenDat, SizeBins=SizeBins, mod="GTG")
     
-    GTGOut[iLinf,1,iMK] <- runopt$NLL[1]
-    GTGOut[iLinf,2,iMK] <- runopt$Ests[1]  #FM
-    GTGOut[iLinf,3,iMK] <- runopt$Ests[2]  #SL50
-    GTGOut[iLinf,4,iMK] <- runopt$Ests[3]  #SL95
-    GTGOut[iLinf,5,iMK] <- runopt$Ests["SPR"]  #SPR
+    GTGOut[iLinf,1,iMK] <- runOpt$NLL[1]
+    GTGOut[iLinf,2,iMK] <- runOpt$lbPars[1]  #FM
+    GTGOut[iLinf,3,iMK] <- ifelse("SL50" %in% names(runOpt$lbPars), runOpt$lbPars[["SL50"]], runOpt$fixedFleetPars[["SL1"]])  #SL50
+    GTGOut[iLinf,4,iMK] <- ifelse("SL95" %in% names(testOpt$lbPars), testOpt$lbPars[["SL95"]], testOpt$fixedFleetPars[["SL2"]])  #SL95
+    GTGOut[iLinf,5,iMK] <- runOpt$lbPars["SPR"]  #SPR
     
-    output_pred <- list.append(output_pred, runopt$PredLen) #saves predicted lengths for each run
+    output_pred <- list.append(output_pred, runOpt$PredLen) #saves predicted lengths for each run
   }
 }
 
