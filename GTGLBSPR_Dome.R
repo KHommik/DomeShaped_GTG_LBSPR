@@ -424,6 +424,7 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
                  fixedFleetPars=fixedFleetPars, LenDat=LenDat, StockPars=StockPars, SizeBins=SizeBins, mod=mod, 
                  method = methodOpt, control= list(maxit=500, abstol=1E-20),
                  hessian = TRUE)
+    mleNames <-  c("log(F/M)", "SL50/Linf", "Sdelta/Linf")
   } else{ # dome-shaped or fixed selectivity logistic
     Start <- log(c(sFM))  #tryFleetPars
     lowerBound <- -20
@@ -434,20 +435,32 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
                  method = methodOpt, lower = lowerBound, upper = upperBound, 
                  control= list(maxit=500, abstol=1E-20),
                  hessian = TRUE)
+    mleNames <- c("log(F/M)")
   }
   
   # negative log-likelihood
   newNLL<-opt$value # replaces objective in nlminb
+
+  # variance-covariance matrix for std error calculation
+  varcov <- solve(opt$hessian) # inverse of hessian matrix
+  
+  # maximum likelihood estimators and fishing parameters
+  MLE <- data.frame(Parameter = mleNames, "Initial" = Start, "Estimate" = opt$par, "Std. Error" = diag(varcov),
+                    check.names = FALSE)
   
   
-  # back-transform MLE
+  # back-transform MLE to obtain fishing parameters
   newFleet <- NULL 
   newFleet$selectivityCurve <- selectivityCurve
   newFleet$FM <- exp(opt$par[1])
+  lbPars <- c("F/M"  = exp(opt$par[1]))
   if(fixedFleetPars$selectivityCurve=="Logistic"){
     if(length(fixedFleetPars) == 1){
       newFleet$SL1 <- exp(opt$par[2]) * StockPars$Linf 
       newFleet$SL2 <- newFleet$SL1 + exp(opt$par[3]) * StockPars$Linf
+      lbPars <- c(lbPars, 
+                  "SL50" = exp(opt$par[2])*StockPars$Linf, 
+                  "SL95" = (exp(opt$par[2]) + exp(opt$par[3]))*StockPars$Linf)
     } else{
       newFleet$SL1 <- fixedFleetPars$SL1
       newFleet$SL2 <- fixedFleetPars$SL2
@@ -462,11 +475,10 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
   }
   
   # delta method to approximate standard error, CIs of estimates
-  varcov <- solve(opt$hessian) # varcov = inverse of the hessian
 
-  # estimators are log(F/M)
+  # ML estimators are log(F/M)
   sderr <- c(sqrt(exp(opt$par[1])*varcov[1,1]))
-  names(sderr) = "FM"
+  names(sderr) = "F/M"
   if(fixedFleetPars$selectivityCurve=="Logistic" && length(fixedFleetPars) == 1){
     # log(SL50/Linf), log((SL95-SL50)/Linf) in log-space
     sderrSL50 <- sqrt((StockPars$Linf*exp(opt$par[2]))^2*varcov[2,2])
@@ -475,19 +487,18 @@ DoOptDome <- function(StockPars, fixedFleetPars, LenDat, SizeBins=NULL, mod=c("G
     sderr <-  c(sderr, SL50 = sderrSL50, SL95 = sderrSL95)
   } 
   
- 
   if (mod == "GTG") runMod <-  GTGDomeLBSPRSim(StockPars, newFleet, SizeBins)
   if (mod == "LBSPR") runMod <- GTGLBSPRSim(StockPars, newFleet, SizeBins)
 
+  lbPars <- c(lbPars, "SPR" = runMod$SPR)
   
   Out <- NULL 
-  Out$Ests <- c(FM=newFleet$FM, SL1=newFleet$SL1, SL2=newFleet$SL2, 
-                SLmesh=newFleet$SLmesh, SLMin = newFleet$SLMin, SPR=runMod$SPR)
-  Out$StdErr <- sderr
-  Out$SelectivityCurve <- selectivityCurve
+  Out$lbPars <- lbPars      # fishing mortality, selectivity (where applicable), SPR
+  Out$lbStdErrs <- sderr    # standard error for fishing mortality,... 
+  Out$fixedFleetPars <- fixedFleetPars
   Out$PredLen <- runMod$LCatchFished * sum(LenDat)
   Out$NLL <- newNLL
-  Out$opt_par <- opt$par
   Out$optimOut <- opt
+  Out$MLE <- MLE
   return(Out)
 }
