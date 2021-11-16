@@ -197,7 +197,7 @@ lbsprEstimate <- DoOptDome(StockPars = StockParsEstimate,
                            fixedFleetPars = fixedFleetParsEstimate, 
                            LenDat = sampleCatch$numbersCatch, 
                            SizeBins = SizeBinsEstimate, "GTG")
-lbsprEstimate$Ests
+lbsprEstimate$lbPars
 ```
 The estimated fishing mortality ratio and SPR values are reasonably close to the true values for most realisations of the random multinomial draw of `nFish` lengths. More accurate estimation model results can be obtained by increasing the sample size of the simulated catch.
 
@@ -235,7 +235,7 @@ lbsprLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate,
                            fixedFleetPars = fixedFleetParsLogistic, 
                            LenDat = sampleCatch$numbersCatch, 
                            SizeBins = SizeBinsEstimate, "GTG")
-lbsprLogisticEstimate$Ests
+lbsprLogisticEstimate$lbPars
 ```
 
 Parameter estimation and status assessment based on a mis-specified logistic curve clearly illustrates how dome-shaped gear selection may bias estimates of fishing mortality towards higher values and estimates of SPR towards lower values when logistic (trawl-like) selection curves is assumed in the LB-SPR assessment. 
@@ -252,7 +252,7 @@ lbsprFullLogisticEstimate <- DoOptDome(StockPars = StockParsEstimate,
                            fixedFleetPars = fixedFleetParsFullLogistic, 
                            LenDat = sampleCatch$numbersCatch, 
                            SizeBins = SizeBinsEstimate, "GTG")
-lbsprFullLogisticEstimate$Ests
+lbsprFullLogisticEstimate$lbPars
 ```
 
 
@@ -260,11 +260,11 @@ We summarise the results in a table.
 ```{r tabulate_data, include=FALSE}
 tableData <- rbind(
   data.frame(parameters = "true", truePars[c("selectivityCurve", "SL1", "SL2", "SLmesh", "MK", "FM", "SPR")]),
-  data.frame(parameters = "estimated", fixedFleetParsEstimate[c("selectivityCurve", "SL1", "SL2", "SLmesh")], MK= StockPars$MK, FM = lbsprEstimate$Ests["FM"], SPR = lbsprEstimate$Ests["SPR"]), 
-  data.frame(parameters = "estimated", fixedFleetParsLogistic[c("selectivityCurve", "SL1", "SL2")], SLmesh = 1, MK= StockPars$MK, FM = lbsprLogisticEstimate$Ests["FM"], SPR = lbsprLogisticEstimate$Ests["SPR"]), 
-  data.frame(parameters = "estimated", fixedFleetParsFullLogistic["selectivityCurve"], SL1 = lbsprFullLogisticEstimate$Ests["SL1"], SL2 = lbsprFullLogisticEstimate$Ests["SL2"], SLmesh = 1, MK= StockPars$MK, FM = lbsprFullLogisticEstimate$Ests["FM"], SPR = lbsprFullLogisticEstimate$Ests["SPR"])
+  data.frame(parameters = "estimated", fixedFleetParsEstimate[c("selectivityCurve", "SL1", "SL2", "SLmesh")], MK= StockPars$MK, FM = lbsprEstimate$lbPars[["F/M"]], SPR = lbsprEstimate$lbPars[["SPR"]]), 
+  data.frame(parameters = "estimated", fixedFleetParsLogistic[c("selectivityCurve", "SL1", "SL2")], SLmesh = 1, MK= StockPars$MK, FM = lbsprLogisticEstimate$lbPars[["F/M"]], SPR = lbsprLogisticEstimate$lbPars[["SPR"]]), 
+  data.frame(parameters = "estimated", fixedFleetParsFullLogistic["selectivityCurve"], SL1 = lbsprFullLogisticEstimate$lbPars[["SL50"]], SL2 = lbsprFullLogisticEstimate$lbPars[["SL95"]], SLmesh = 1, MK= StockPars$MK, FM = lbsprFullLogisticEstimate$lbPars[["F/M"]], SPR = lbsprFullLogisticEstimate$lbPars[["SPR"]])
 )
-row.names(tableData)<- NULL
+
 colnames(tableData) <- c("parameters", "selectivityCurve", "SL1", "SL2", "SLmesh", "M/K", "F/M", "SPR")
 kable_out <- knitr::kable(tableData, "html") %>%
   kable_styling("striped")
